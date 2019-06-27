@@ -7,7 +7,7 @@ const logger = winston.createLogger({
   transports: [
     new winston.transports.File({ filename: 'info.log' })
   ]
-})
+});
 
 if (NODE_ENV !== 'production') {
   logger.add(new winston.transports.Console({
