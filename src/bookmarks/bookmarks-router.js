@@ -1,8 +1,7 @@
+const path = require('path');
 const express = require('express');
 const xss = require('xss');
-const uuid = require('uuid/v4');
 const logger = require('../logger');
-const { bookmarks } = require('../store');
 const validUrl = require('valid-url');
 const BookmarksService = require('./bookmarks-service');
 
@@ -18,7 +17,7 @@ const serializeBookmark = bookmark => ({
 });
 
 bookmarksRouter
-    .route('/bookmarks')
+    .route('/api/bookmarks')
     .get((req, res, next) => {
         const knexInstance = req.app.get('db');
         BookmarksService.getAllBookmarks(knexInstance)
@@ -39,6 +38,7 @@ bookmarksRouter
 
         for (const [key, value] of Object.entries(newBookmark)) {
             if (value == null) {
+                logger.error(`${key} is required.`)
                 return res.status(400).json({
                     error: { message: `Missing '${key}' in request body.` }
                 })
@@ -69,17 +69,15 @@ bookmarksRouter
             .then(bookmark => {
                 res
                     .status(201)
-                    .location(`/bookmarks/${bookmark.id}`)
+                    .location(path.posix.join(req.originalUrl, `/${bookmark.id}`))
                     .json(serializeBookmark(bookmark))
             })
             .catch(next)
-
-        //logger.info(`Bookmark with ${id} was created.`);
     })
 
 
 bookmarksRouter
-    .route('/bookmarks/:id')
+    .route('/api/bookmarks/:id')
     .all((req, res, next) => {
         const knexInstance = req.app.get('db');
         BookmarksService.getById(
@@ -112,6 +110,32 @@ bookmarksRouter
             res.status(204).end()
         })
         .catch(next)
+    })
+    .patch(bodyParser, (req, res, next) => {
+        const knexInstance = req.app.get('db');
+        const { title, url, description, rating } = req.body;
+        const bookmarkToUpdate = { title, url, description, rating };
+
+        const numberOfValues = Object.values(bookmarkToUpdate).filter(Boolean).length;
+        if (numberOfValues === 0) {
+            return res
+                .status(400)
+                .json({
+                    error: {
+                        message: `Request body must content either 'title', 'url', 'description, or 'rating'.`
+                    }
+                })
+        }
+
+        BookmarksService.updateBookmark(
+            knexInstance, 
+            req.params.id,
+            bookmarkToUpdate
+        )
+            .then(numRowsAffected => {
+                res.status(204).end()
+            })
+            .catch(next)
     })
 
 module.exports = bookmarksRouter;
